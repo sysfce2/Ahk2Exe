@@ -306,7 +306,7 @@ ChangeVersionInfo(ExeFile, hUpdate, VerInfo)
 	if !hModule
 		Util_Error("Error: Error opening destination file. (D1)", 0x31)
 	
-	hRsrc := DllCall("FindResource", "ptr", hModule, "ptr", 1, "ptr", 16, "ptr") ; Version Info\1
+	hRsrc := DllCall("FindResource", "ptr", hModule, "ptr", 1, "ptr", 16, "ptr")
 	hMem := DllCall("LoadResource", "ptr", hModule, "ptr", hRsrc, "ptr")
 	vi := new VersionRes(DllCall("LockResource", "ptr", hMem, "ptr"))
 	DllCall("FreeLibrary", "ptr", hModule)
@@ -314,7 +314,7 @@ ChangeVersionInfo(ExeFile, hUpdate, VerInfo)
 	ffi := vi.GetDataAddr()
 	props := SafeGetViChild(SafeGetViChild(vi, "StringFileInfo"), "040904b0")
 	for k,v in VerInfo
-	{	if (!v)
+	{	if (!v && !(k = "Language"))
 			props.DeleteChild(k)                   ; Remove any unwanted version info
 		else
 		{	if !(k = "Language")
@@ -326,16 +326,17 @@ ChangeVersionInfo(ExeFile, hUpdate, VerInfo)
 						NumPut(hiPart, ffi+8,  "UInt"), NumPut(loPart, ffi+12, "UInt")
 				else NumPut(hiPart, ffi+16, "UInt"), NumPut(loPart, ffi+20, "UInt")
 	}	}	}
-	VarSetCapacity(newVI, 16384) ; Should be enough
+	VarSetCapacity(newVI, 16384)               ; Should be enough
 	viSize := vi.Save(&newVI)
 	
-	if (wk := VerInfo.Language)                               ; Change language?
-	{	NumPut(VerInfo.Language, newVI, viSize-4, "UShort")
-	}
+	if (VerInfo.HasKey("Language"))            ; Change language?
+	{	NumPut(wk := VerInfo.Language, newVI, viSize-4, "UShort")
+		StrPut(Format("{:04X}" ,wk), &newVI+0x86, 4, "UTF-16")
+	} else wk := 0x409
 	DllCall("UpdateResource", "ptr", hUpdate, "ptr", 16, "ptr", 1
-		, "ushort", 0x409, "ptr", 0, "uint", 0, "uint")         ; Delete lang 0x409
+		, "ushort", 0x409, "ptr", 0, "uint", 0, "uint") ; Delete lang 0x409
 	if !DllCall("UpdateResource", "ptr", hUpdate, "ptr", 16, "ptr", 1, "ushort"
-		, wk ? wk : 0x409, "ptr", &newVI, "uint", viSize, "uint") ; Add new language
+	, wk, "ptr", &newVI, "uint", viSize, "uint")      ; Add new language
 		Util_Error("Error changing the version information. (D1)", 0x67)
 }
 
